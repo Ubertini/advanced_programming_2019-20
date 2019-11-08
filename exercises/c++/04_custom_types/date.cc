@@ -23,8 +23,8 @@ class Date{
   	~Date(){}
   	  void print() {std::cout << "Month = " << int(_month) << std::endl;}
   	  auto day() const{return _day;}
-  	  auto month() const {return _month;}
-  	  auto year() const {return _year;}
+  	  auto month() const{return _month;}
+  	  auto year() const{return _year;}
   	  void add_days(const unsigned int n){
   	  	for(int i=0;i<n;i++){
   	  		switch(_month){
