@@ -1,7 +1,9 @@
-#include <iostream>
-#include <memory>  //unique_ptr
-
 #include "ap_error.h"
+#include <algorithm>
+#include <iostream>
+#include <iterator>
+#include <memory>  //unique_ptr
+#include <vector>
 
 enum class method { push_back, push_front };
 
@@ -16,15 +18,14 @@ class List {
     node(T&& v, node* p) : next{p}, value{std::move(v)} {
       std::cout << "move ctor" << std::endl;
     }
-    node(const std::unique_ptr<node>& p) : value{p->value} {
+    explicit node(const std::unique_ptr<node>& p) : value{p->value} {
       if (p->next)
         next = std::make_unique<node>(p->next);
     }
   };
 
   std::unique_ptr<node> head;
-  std::size_t size;
-  
+
   template <class OT>
   void push_back(OT&& v);
 
@@ -40,55 +41,77 @@ class List {
   }
   // void push_front(T&& v);
 
-  node* tail();
+  node* tail() noexcept;
 
  public:
-  List() noexcept=default;
-  List(List&& l){
-    head=std::move(l.head);
-    size=l.size;
-    l.size=0;
-  };
-  List& operator=(List&& l){
-    head=std::move(l.head);
-    size=l.size;
-    l.size=0;
-    return *this;
-  };
-
+  List() noexcept = default;
+  List(List&& l) noexcept = default;
+  List& operator=(List&& l) noexcept = default;
 
   List(const List& l);
-  List& operator=(const List& l){
-  head.reset();
-  head = std::make_unique<node>(l.head);
-  size=l.size;
-  return *this;
-  };
-
-
-  void reset(){
-    auto tmp=head.get();
-    while(tmp->next){
-      auto tmp1=tmp->next.get();
-      tmp->next.reset();
-      tmp->value=0;
-      tmp=tmp1;
-    }
-    head.reset();
-    size=0;
-  };
-
-  std::size_t size_list() const {return size;};
+  List& operator=(const List& l);
 
   template <class OT>
   void insert(OT&& v, const method m);
 
   template <class O>
   friend std::ostream& operator<<(std::ostream&, const List<O>&);
+
+  template <typename O>
+  class __iterator;
+
+  using iterator = __iterator<T>;
+  using const_iterator = __iterator<const T>;
+
+  iterator begin() noexcept { return iterator{head.get()}; }
+  iterator end() {- return iterator{nullptr}; }
+
+  const_iterator begin() const { return const_iterator{head.get()}; }
+  const_iterator end() const { return const_iterator{nullptr}; }
+
+  const_iterator cbegin() const { return const_iterator{head.get()}; }
+  const_iterator cend() const { return const_iterator{nullptr}; }
+};
+
+template <typename T>
+template <typename O>
+class List<T>::__iterator {
+  using node = typename List<T>::node;
+  node* current;
+
+ public:
+  explicit __iterator(node* x) noexcept : current{x} {}
+
+  using value_type = O;
+  using difference_type = std::ptrdiff_t;
+  using iterator_category = std::forward_iterator_tag;
+  using reference = value_type&;
+  using pointer = value_type*;
+
+  reference operator*() const noexcept { return current->value; }
+  pointer operator->() const noexcept { return &(*(*this)); }
+
+  __iterator& operator++() noexcept {  // pre increment
+    current = current->next.get();
+    return *this;
+  }
+
+  __iterator operator++(int) noexcept {
+    __iterator tmp{current};
+    ++(*this);
+    return tmp;
+  }
+
+  friend bool operator==(const __iterator& a, const __iterator& b) {
+    return a.current == b.current;
+  }
+  friend bool operator!=(const __iterator& a, const __iterator& b) {
+    return !(a == b);
+  }
 };
 
 template <class T>
-typename List<T>::node* List<T>::tail() {
+typename List<T>::node* List<T>::tail() noexcept {
   auto tmp = head.get();
 
   while (tmp->next)
@@ -103,18 +126,15 @@ void List<T>::insert(OT&& v, const method m) {
   if (!head) {
     // head.reset(new node{v,nullptr});
     head = std::make_unique<node>(std::forward<OT>(v), nullptr);
-    size++;
     return;
   }
   switch (m) {
     case method::push_back:
       push_back(std::forward<OT>(v));
-      size++;
       break;
 
     case method::push_front:
       push_front(std::forward<OT>(v));
-      size++;
       break;
     default:
       AP_ERROR(false) << "Unknown insertion method";
@@ -131,18 +151,6 @@ void List<T>::push_back(OT&& v) {
 }
 
 template <class T>
-List<T>::List(const List& l) {
-  // auto tmp = l.head.get();
-  // while(tmp){
-  //   insert(tmp->value,method::push_back);
-  //   tmp=tmp->next.get();
-  // }
-  head = std::make_unique<node>(l.head);
-  size=l.size;
-}
-
-
-template <class T>
 std::ostream& operator<<(std::ostream& os, const List<T>& l) {
   auto tmp = l.head.get();
   while (tmp) {
@@ -152,13 +160,15 @@ std::ostream& operator<<(std::ostream& os, const List<T>& l) {
   return os;
 }
 
-
-
-/*template <class T>
-List<T>& operator=(const List<T>& l){
-
-
-}*/
+template <class T>
+List<T>::List(const List& l) {
+  // auto tmp = l.head.get();
+  // while(tmp){
+  //   insert(tmp->value,method::push_back);
+  //   tmp=tmp->next.get();
+  // }
+  head = std::make_unique<node>(l.head);
+}
 
 int main() {
   try {
@@ -168,22 +178,22 @@ int main() {
     l.insert(5, method::push_back);
     l.insert(3, method::push_front);
 
-    List<int> ol{};
-    ol=l;
-
-    int a = 9;
-    l.insert(14, method::push_front);
-    l.insert(a, method::push_front);
-
     std::cout << l << std::endl;
-    std::cout<<l.size_list()<<std::endl;
-    std::cout << ol << std::endl;
-    std::cout<<ol.size_list()<<std::endl;
-    l.reset();
-    l=std::move(ol);
-    std::cout<<ol.size_list()<<std::endl;
-    std::cout<<"After reset:"<<l<<std::endl;
-    std::cout<<"It is void as it should be"<<std::endl;
+
+    std::vector<int> v(3);
+
+    std::copy(l.cbegin(), l.cend(), v.begin());
+
+    for (auto x : v)
+      std::cout << x << std::endl;
+    return 0;
+    // auto ol = l;
+    // int a = 9;
+    // l.insert(14, method::push_front);
+    // l.insert(a, method::push_front);
+
+    // std::cout << l << std::endl;
+    // std::cout << ol << std::endl;
 
   } catch (std::exception& e) {
     std::cerr << e.what() << std::endl;
